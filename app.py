@@ -14,11 +14,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">🏗️ Sistema de Auditoría Interna IA — AISC 207</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Módulo Gratuito con Llama-3 (Meta)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Módulo Automático y Gratuito con Llama-3</div>', unsafe_allow_html=True)
 
-# 2. Barra lateral para la llave de Groq
-st.sidebar.header("⚙️ Configuración")
-api_key = st.sidebar.text_input("Introduce tu Groq API Key (gsk_...):", type="password")
+# Intentar jalar la API Key desde los Secrets de la plataforma
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+except Exception:
+    api_key = None
 
 if "fase" not in st.session_state:
     st.session_state.fase = "INICIO"
@@ -26,7 +28,6 @@ if "fase" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Instrucciones del Auditor (Fijas, fuera del historial del chat)
 SYSTEM_PROMPT = """
 Eres un Auditor Líder experto de la AISC (American Institute of Steel Construction). 
 Tu objetivo es evaluar de forma estricta, profesional y constructiva si la empresa cumple con el estándar AISC 207, específicamente los Capítulos 1 (SGC) y 2 (Requisitos para Fabricantes de Edificios - BU).
@@ -43,22 +44,21 @@ Mantén un tono serio, corporativo, analítico y enfocado en la mejora continua.
 # 4. Flujo de Estados
 if st.session_state.fase == "INICIO":
     st.markdown("""
-    ### ¡Bienvenido al Panel de Auditoría Interna Gratuito!
+    ### ¡Bienvenido al Panel de Auditoría Interna!
     Este sistema utiliza Inteligencia Artificial de Código Abierto para auditar **AISC 207**.
     
     **Instrucciones:**
-    1. Introduce tu API Key gratuita de Groq en la barra lateral.
-    2. Haz clic en **"Iniciar Auditoría Interna"**.
+    1. Asegúrate de haber configurado tu `GROQ_API_KEY` en los Secrets de Streamlit.
+    2. Haz clic en el botón de abajo para iniciar la sesión de auditoría.
     """)
     
     if st.button("🚀 Iniciar Auditoría Interna", type="primary"):
         if not api_key:
-            st.error("⚠️ Debes ingresar tu Groq API Key en la barra lateral para iniciar.")
+            st.error("⚠️ No se encontró la variable GROQ_API_KEY en los Secrets de la aplicación. Configúrala en el panel de administración.")
         else:
             st.session_state.fase = "AUDITANDO"
-            # Guardamos solo la conversación limpia aquí
             st.session_state.messages = [
-                {"role": "assistant", "content": "Saludos. Damos inicio formal a la auditoría interna bajo AISC 207 (BU). Por favor, proporcione la Especificación de Procedimiento de Soldadura (WPS) más crítica de su taller o suba el documento para comenzar."}
+                {"role": "assistant", "content": "Saludos. Damos inicio formal a la auditoría interna bajo AISC 207 (BU). Por favor, proporcione la Especificación de Procedimiento de Soldadura (WPS) más crítica de su taller o suba el documento en PDF para comenzar."}
             ]
             st.rerun()
 
@@ -71,10 +71,8 @@ elif st.session_state.fase == "AUDITANDO":
         
     st.write("---")
     
-    # Inicializar cliente Groq
     client = Groq(api_key=api_key)
     
-    # Mostrar el historial en pantalla
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -87,9 +85,9 @@ elif st.session_state.fase == "AUDITANDO":
         for page in pdf_reader.pages:
             file_content += page.extract_text() + "\n"
 
-    if user_input := st.chat_input("Escribe aquí..."):
+    if user_input := st.chat_input("Escribe tu respuesta aquí..."):
         if file_content:
-            full_user_message = f"[ARCHIVO ADJUNTADO: {uploaded_file.name}]\n\nContenido extraído del documento:\n{file_content}\n\nComentario u observaciones del usuario: {user_input}"
+            full_user_message = f"[ARCHIVO ADJUNTADO: {uploaded_file.name}]\n\nContenido extraído del documento:\n{file_content}\n\nComentario del usuario: {user_input}"
         else:
             full_user_message = user_input
 
@@ -101,12 +99,10 @@ elif st.session_state.fase == "AUDITANDO":
             message_placeholder = st.empty()
             full_response = ""
             
-            # Construimos los mensajes inyectando el SYSTEM_PROMPT de forma segura al inicio
             payload_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
             for m in st.session_state.messages:
                 payload_messages.append({"role": m["role"], "content": m["content"]})
             
-            # Llamada al modelo Llama 3 70B de Meta
             completion = client.chat.completions.create(
                 model="llama3-70b-8192",
                 messages=payload_messages,
@@ -125,8 +121,7 @@ elif st.session_state.fase == "TERMINADA":
     st.markdown('<div class="status-box" style="background-color: #ECFDF5; border-left-color: #10B981;">✅ <b>Auditoría Finalizada</b></div>', unsafe_allow_html=True)
     
     st.write("### Generar Reporte de Auditoría")
-    st.write("Presiona el botón de abajo para consolidar todos los hallazgos discutidos en un informe formal.")
-
+    
     reporte_texto = "====================================================\n        INFORME DE AUDITORÍA INTERNA AISC 207\n====================================================\n\n"
     reporte_texto += "ESTÁNDAR: AISC 207 (Building Fabricator Certification - BU)\n"
     reporte_texto += "AUDITOR: Auditor Inteligencia Artificial Líder SGC\n\n"
@@ -140,7 +135,7 @@ elif st.session_state.fase == "TERMINADA":
                 lineas = msg["content"].split("\n")
                 reporte_texto += f"► Evidencia: {lineas[0]}\n"
             else:
-                reporte_texto += f"► Respuesta de la Empresa: {msg['content']}\n"
+                reporte_texto += f"► Empresa: {msg['content']}\n"
         elif msg["role"] == "assistant":
             reporte_texto += f"\nEvaluación del Auditor:\n{msg['content']}\n"
             reporte_texto += "----------------------------------------------------\n"
